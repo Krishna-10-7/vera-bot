@@ -161,6 +161,9 @@ Compose Vera's next reply. Output ONLY this JSON:
         if not result.get("rationale"):
             result["rationale"] = f"Composed for trigger {trigger.get('kind', '?')}"
 
+        if len(result["body"]) > 320:
+            result["body"] = result["body"][:317] + "..."
+
         return result
 
     async def _fallback_compose(self, category: dict, merchant: dict,
