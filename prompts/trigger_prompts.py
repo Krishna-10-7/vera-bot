@@ -133,7 +133,8 @@ COMPOSE a merchant-facing message (send_as=vera) that:
 def prompt_recall_due(category: dict, merchant: dict, trigger: dict, customer: dict = None) -> str:
     payload = trigger.get("payload", {})
     slots = payload.get("available_slots", [])
-    slot_str = " or ".join([s.get("label", "?") for s in slots[:2]])
+    slot1 = slots[0].get("label", "Slot 1") if len(slots) > 0 else "Slot 1"
+    slot2 = slots[1].get("label", "Slot 2") if len(slots) > 1 else "Slot 2"
     service = payload.get("service_due", "checkup")
     last_date = payload.get("last_service_date", "?")
     due_date = payload.get("due_date", "?")
@@ -152,12 +153,12 @@ TRIGGER DATA:
 - Last service: {last_date}
 - Due date: {due_date}
 - Days until expiry: {days_until_expiry}
-- Available slots: {slot_str}
+- Available slots: {slot1} and {slot2}
 - Active merchant offers: {active_offers}
 
 ENGAGEMENT STRATEGY — MANDATORY:
 1. URGENCY: Use specific deadline language ("expires {due_date}", "only {days_until_expiry} days left")
-2. BINARY CTA: End with EXACTLY TWO options: "Reply 1 for {first_slot} or Reply 2 for {second_slot}"
+2. BINARY CTA: End with EXACTLY TWO options: "Reply 1 for {slot1} or Reply 2 for {slot2}"
 3. SOCIAL PROOF: If available, mention "Preferred by X% of your peer customers"
 4. NO MULTI-CHOICE: Never offer 3+ options — exactly 2 slot choices maximum
 5. EFFORT EXTERNAL: Frame as "Quick 2-min booking" not "Schedule appointment"
