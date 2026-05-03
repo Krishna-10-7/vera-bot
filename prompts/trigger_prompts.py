@@ -133,10 +133,11 @@ COMPOSE a merchant-facing message (send_as=vera) that:
 def prompt_recall_due(category: dict, merchant: dict, trigger: dict, customer: dict = None) -> str:
     payload = trigger.get("payload", {})
     slots = payload.get("available_slots", [])
-    slot_str = " ya ".join([s.get("label", "?") for s in slots[:3]])
+    slot_str = " or ".join([s.get("label", "?") for s in slots[:2]])
     service = payload.get("service_due", "checkup")
     last_date = payload.get("last_service_date", "?")
     due_date = payload.get("due_date", "?")
+    days_until_expiry = payload.get("days_until_expiry", "?")
 
     # Get merchant offer for this service
     active_offers = [o["title"] for o in merchant.get("offers", []) if o.get("status") == "active"]
@@ -150,16 +151,25 @@ TRIGGER DATA:
 - Service due: {service}
 - Last service: {last_date}
 - Due date: {due_date}
+- Days until expiry: {days_until_expiry}
 - Available slots: {slot_str}
 - Active merchant offers: {active_offers}
 
+ENGAGEMENT STRATEGY — MANDATORY:
+1. URGENCY: Use specific deadline language ("expires {due_date}", "only {days_until_expiry} days left")
+2. BINARY CTA: End with EXACTLY TWO options: "Reply 1 for {first_slot} or Reply 2 for {second_slot}"
+3. SOCIAL PROOF: If available, mention "Preferred by X% of your peer customers"
+4. NO MULTI-CHOICE: Never offer 3+ options — exactly 2 slot choices maximum
+5. EFFORT EXTERNAL: Frame as "Quick 2-min booking" not "Schedule appointment"
+
 COMPOSE a customer-facing message (send_as=merchant_on_behalf) that:
 1. Addresses the customer by name
-2. References the recall window and when they were last seen
-3. Offers specific slots matching their preference (from customer preferences)
-4. Includes the real price from merchant's active offers
+2. References the specific due date and urgency (days remaining)
+3. Mentions slots as binary choice with urgency cues ("only 1 spot left at {slot1}")
+4. Includes actual price from merchant's active offers if available
 5. Match the customer's language_pref
-6. Warm but clinical — no overclaims, no medical guarantees"""
+6. Warm but clinical — no overclaims, no medical guarantees
+7. Character count: 200-350 chars max"""
 
 
 def prompt_perf_dip(category: dict, merchant: dict, trigger: dict, customer: dict = None) -> str:
@@ -168,19 +178,36 @@ def prompt_perf_dip(category: dict, merchant: dict, trigger: dict, customer: dic
     delta = payload.get("delta_pct", 0)
     window = payload.get("window", "7d")
     vs_baseline = payload.get("vs_baseline", "?")
-    peer_ctr = category.get("peer_stats", {}).get("avg_ctr", "?")
+    peer_median = payload.get("peer_median_ctr", "?")
+    suggested_action = payload.get("suggested_action", "Try a fresh promo offer")
 
-    return f"""TRIGGER: Performance dip — merchant's {metric} dropped {_safe_pct(delta)} over {window} (baseline: {vs_baseline}).
+    return f"""TRIGGER: Performance dip alert — merchant's key metric has declined. This is a MERCHANT-FACING message.
 
 {_fmt_merchant(merchant)}
 
-PEER CONTEXT: category avg CTR = {peer_ctr}
+TRIGGER DATA:
+- Metric: {metric}
+- Delta: {delta} in {window}
+- vs baseline: {vs_baseline}
+- Peer median {metric}: {peer_median}
+- Suggested action: {suggested_action}
+
+ENGAGEMENT STRATEGY — MANDATORY:
+1. SPECIFICITY: Lead with exact numbers ("views down {delta}% to {vs_baseline}", NOT "significantly down")
+2. CONTEXT: Explain WHY now ("post-holiday dip is normal", "weekend pattern")
+3. LOSS AVERSION: Highlight revenue impact ("missing X views = approx Y lost bookings")
+4. EFFORT EXTERNAL: "I'll draft 3 posts for you (takes 5 min), you choose to post or skip"
+5. BINARY CTA: "Reply YES and I'll send drafts in 3 minutes" OR "Reply 1 to activate, 2 to skip"
+6. NO VAGUE SOLUTIONS: Never say "try a fresh promo" — say "Post a specific offer like 'Service @ ₹Price'"
 
 COMPOSE a merchant-facing message (send_as=vera) that:
-1. States the dip with exact numbers — but contextualize it (is it seasonal? is it actionable?)
-2. Compare to peer median if relevant
-3. Suggest ONE specific action that could help
-4. Frame constructively — not doom-and-gloom"""
+1. Starts with: Owner Name, Merchant Name, Locality
+2. States exact delta with context (not alarming, matter-of-fact)
+3. Compares to peer median to normalize (e.g., "you're at 3.2% CTR, peer avg is 3.5%")
+4. Proposes ONE specific action (not generic advice)
+5. Ends with binary YES/NO CTA with time estimate ("Reply YES, 5-min fix")
+6. Character count: 250-350 chars max
+7. No URLs, no generic language"""
 
 
 def prompt_perf_spike(category: dict, merchant: dict, trigger: dict, customer: dict = None) -> str:
