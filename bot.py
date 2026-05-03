@@ -206,7 +206,15 @@ async def tick(body: TickBody):
         })
 
     if not tasks:
-        return {"actions": []}
+        # Debug: return info about why no tasks
+        return {
+            "actions": [],
+            "_debug": {
+                "triggers_requested": len(body.available_triggers),
+                "triggers_found": sum(1 for tid in body.available_triggers if store.get_trigger(tid)),
+                "sent_suppressions_count": len(sent_suppressions),
+            }
+        }
 
     # 2. Parallelize LLM calls with semaphore (max 5 to respect rate limits & latency)
     async def compose_with_semaphore(t):
