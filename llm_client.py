@@ -16,6 +16,10 @@ import httpx
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_DEPLOYMENT_NAME = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+AZURE_OPENAI_API_VERSION = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -63,7 +67,13 @@ class LLMClient:
     def _build_provider_chain(self) -> list[dict]:
         """Build ordered list of available providers."""
         chain = []
-        if OPENAI_API_KEY:
+        if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
+            chain.append({
+                "name": "azure_openai",
+                "model": AZURE_OPENAI_DEPLOYMENT_NAME,
+                "call": self._call_azure_openai
+            })
+        elif OPENAI_API_KEY:
             chain.append({
                 "name": "openai",
                 "model": OPENAI_MODEL,
@@ -111,6 +121,33 @@ class LLMClient:
                 continue
 
         raise RuntimeError(f"All LLM providers failed: {'; '.join(errors)}")
+
+    async def _call_azure_openai(self, system: str, user: str, temperature: float,
+                                 json_mode: bool) -> str:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user})
+
+        body = {
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": 800,
+        }
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+
+        endpoint = AZURE_OPENAI_ENDPOINT.rstrip("/")
+        url = f"{endpoint}/openai/deployments/{AZURE_OPENAI_DEPLOYMENT_NAME}/chat/completions?api-version={AZURE_OPENAI_API_VERSION}"
+
+        resp = await self._http.post(
+            url,
+            headers={"api-key": AZURE_OPENAI_API_KEY,
+                     "Content-Type": "application/json"},
+            json=body
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
     async def _call_openai(self, system: str, user: str, temperature: float,
                            json_mode: bool) -> str:
