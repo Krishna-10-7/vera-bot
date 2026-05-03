@@ -28,3 +28,6 @@ dataset/expanded/
 
 # Artifacts
 walkthrough.md
+
+# Secret-bearing local tooling
+judge_simulator.py

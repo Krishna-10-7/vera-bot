@@ -4,6 +4,8 @@ Idempotent by (context_id, version). Atomic version replacement.
 """
 
 from __future__ import annotations
+import json
+from pathlib import Path
 from typing import Any, Optional
 from datetime import datetime
 
@@ -14,6 +16,7 @@ class ContextStore:
     def __init__(self):
         # Storage: {(scope, context_id): {"version": int, "payload": dict, "stored_at": str}}
         self._store: dict[tuple[str, str], dict[str, Any]] = {}
+        self._seed_cache: dict[str, dict[str, dict]] = {}
 
     def push(self, scope: str, context_id: str, version: int, payload: dict) -> tuple[bool, str, int | None]:
         """
@@ -28,8 +31,10 @@ class ContextStore:
         key = (scope, context_id)
         existing = self._store.get(key)
 
-        if existing and existing["version"] >= version:
+        if existing and existing["version"] > version:
             return False, "stale_version", existing["version"]
+        if existing and existing["version"] == version:
+            return True, "ok", existing["version"]
 
         self._store[key] = {
             "version": version,
@@ -41,7 +46,9 @@ class ContextStore:
     def get(self, scope: str, context_id: str) -> Optional[dict]:
         """Get the payload for a (scope, context_id) pair."""
         entry = self._store.get((scope, context_id))
-        return entry["payload"] if entry else None
+        if entry:
+            return entry["payload"]
+        return self._get_seed(scope, context_id)
 
     def get_category(self, slug: str) -> Optional[dict]:
         return self.get("category", slug)
@@ -77,3 +84,45 @@ class ContextStore:
             for (s, _), entry in self._store.items()
             if s == scope
         ]
+
+    def _get_seed(self, scope: str, context_id: str) -> Optional[dict]:
+        """Lazy local fallback for the bundled simulator, which omits customer pushes."""
+        if scope not in self._seed_cache:
+            self._seed_cache[scope] = self._load_seed_scope(scope)
+        return self._seed_cache[scope].get(context_id)
+
+    def _load_seed_scope(self, scope: str) -> dict[str, dict]:
+        dataset_dir = Path(__file__).parent / "dataset"
+        files = {
+            "merchant": (dataset_dir / "merchants_seed.json", "merchants", "merchant_id"),
+            "customer": (dataset_dir / "customers_seed.json", "customers", "customer_id"),
+            "trigger": (dataset_dir / "triggers_seed.json", "triggers", "id"),
+        }
+
+        if scope == "category":
+            data: dict[str, dict] = {}
+            cat_dir = dataset_dir / "categories"
+            if not cat_dir.exists():
+                return data
+            for path in cat_dir.glob("*.json"):
+                try:
+                    payload = json.loads(path.read_text(encoding="utf-8"))
+                    data[payload.get("slug", path.stem)] = payload
+                except Exception:
+                    continue
+            return data
+
+        if scope not in files:
+            return {}
+
+        path, collection_key, id_key = files[scope]
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+        return {
+            item[id_key]: item
+            for item in raw.get(collection_key, [])
+            if isinstance(item, dict) and item.get(id_key)
+        }

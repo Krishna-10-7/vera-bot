@@ -105,6 +105,10 @@ class LLMClient:
             return f"{self._providers[0]['name']} ({self._providers[0]['model']})"
         return "none configured"
 
+    @property
+    def is_configured(self) -> bool:
+        return bool(self._providers)
+
     async def complete(self, system: str, user: str, temperature: float = 0.1,
                        json_mode: bool = True) -> LLMResponse:
         """

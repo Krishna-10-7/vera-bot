@@ -127,7 +127,9 @@ async def push_context(body: ContextBody):
 
     if accepted:
         return {
-            "status": "accepted",
+            "accepted": True,
+            "ack_id": f"ack_{body.scope}_{body.context_id}_v{body.version}",
+            "stored_at": datetime.utcnow().isoformat() + "Z",
             "scope": body.scope,
             "context_id": body.context_id,
             "version": body.version,
@@ -136,7 +138,7 @@ async def push_context(body: ContextBody):
         return JSONResponse(
             status_code=409 if reason == "stale_version" else 400,
             content={
-                "status": "rejected",
+                "accepted": False,
                 "reason": reason,
                 "current_version": current_version,
                 "scope": body.scope,

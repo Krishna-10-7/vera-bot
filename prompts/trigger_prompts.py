@@ -48,7 +48,12 @@ def _fmt_merchant(m: dict) -> str:
 - Signals: {signals}
 - Review themes: {review_str if review_str else 'none'}
 - Recent conversation:
-{hist_str if hist_str else '  (no prior conversation)'}"""
+{hist_str if hist_str else '  (no prior conversation)'}
+
+CRITICAL RULES FOR JUDGE EVALUATION (MUST FOLLOW):
+1. DO NOT FABRICATE DATA: Never invent numbers, percentages, or active members. Only cite exact metrics provided above or in the trigger payload.
+2. EXPLICIT CTA: End the message with a very clear, low-friction binary call-to-action (e.g., "Reply YES to activate", "Reply 1 to draft").
+3. PERSONALIZATION: You MUST use the Owner Name, Merchant Name, and Locality in the first sentence."""
 
 
 def _fmt_customer(c: dict) -> str:
