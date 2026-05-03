@@ -84,7 +84,7 @@ async def main():
         category = categories.get(category_slug, {})
         customer = customers.get(customer_id) if customer_id else None
 
-        print(f"\n[{i+1}/{len(test_pairs)}] {test_id}: {trigger.get('kind', '?')} → {merchant.get('identity', {}).get('name', '?')}")
+        print(f"\n[{i+1}/{len(test_pairs)}] {test_id}: {trigger.get('kind', '?')} -> {merchant.get('identity', {}).get('name', '?')}")
 
         try:
             result = await composer.compose(category, merchant, trigger, customer)
@@ -101,9 +101,10 @@ async def main():
                     "rationale": result.get("rationale", ""),
                 }
                 results.append(entry)
-                print(f"  ✓ {result.get('body', '')[:80]}...")
+                safe_body = result.get('body', '')[:80].encode('cp1252', errors='replace').decode('cp1252')
+                print(f"  [+] {safe_body}...")
             else:
-                print(f"  ✗ Composition returned None")
+                print(f"  [-] Composition returned None")
                 results.append({
                     "test_id": test_id, "trigger_id": trigger_id,
                     "merchant_id": merchant_id, "customer_id": customer_id,
@@ -112,7 +113,7 @@ async def main():
                     "suppression_key": "", "rationale": "Fallback entry",
                 })
         except Exception as e:
-            print(f"  ✗ Error: {e}")
+            print(f"  [-] Error: {e}")
             results.append({
                 "test_id": test_id, "trigger_id": trigger_id,
                 "merchant_id": merchant_id, "customer_id": customer_id,
@@ -126,7 +127,7 @@ async def main():
 
     # Write submission.jsonl
     output_path = Path("submission.jsonl")
-    with open(output_path, "w") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for entry in results:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
