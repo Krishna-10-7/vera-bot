@@ -139,7 +139,25 @@ class LLMClient:
             "max_completion_tokens": 800,
         }
         if json_mode:
-            body["response_format"] = {"type": "json_object"}
+            # Use strict JSON mode for 100% schema adherence
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "vera_message",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "body": {"type": "string", "description": "The message body"},
+                            "cta": {"type": "string", "description": "Call-to-action type"},
+                            "send_as": {"type": "string", "description": "Sender identity"},
+                            "suppression_key": {"type": "string", "description": "Suppression key for dedup"},
+                            "rationale": {"type": "string", "description": "Reasoning behind the message"}
+                        },
+                        "required": ["body", "cta"]
+                    }
+                }
+            }
 
         endpoint = AZURE_OPENAI_ENDPOINT.rstrip("/")
         url = f"{endpoint}/openai/deployments/{AZURE_OPENAI_DEPLOYMENT_NAME}/chat/completions?api-version={AZURE_OPENAI_API_VERSION}"

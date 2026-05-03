@@ -40,6 +40,10 @@ conv_mgr = ConversationManager()
 START_TIME = time.time()
 sent_suppressions: set[str] = set()
 
+# Semaphore to limit concurrent LLM calls (prevent burst rate-limit hits)
+# Azure OpenAI 105k TPM limit: 5 concurrent calls = ~14k TPM per call, safe
+compose_semaphore = asyncio.Semaphore(5)
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # PYDANTIC MODELS
@@ -204,14 +208,18 @@ async def tick(body: TickBody):
     if not tasks:
         return {"actions": []}
 
-    # 2. Parallelize LLM calls (max 5 to respect rate limits & latency)
+    # 2. Parallelize LLM calls with semaphore (max 5 to respect rate limits & latency)
+    async def compose_with_semaphore(t):
+        async with compose_semaphore:
+            return await composer.compose(
+                t["category"], t["merchant"], t["trigger"], t["customer"]
+            )
+    
     batch = tasks[:5]
     try:
         results = await asyncio.wait_for(
             asyncio.gather(*[
-                composer.compose(
-                    t["category"], t["merchant"], t["trigger"], t["customer"]
-                )
+                compose_with_semaphore(t)
                 for t in batch
             ], return_exceptions=True),
             timeout=9.0  # 9s hard timeout — leave 1s margin
