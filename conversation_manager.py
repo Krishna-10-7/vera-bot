@@ -6,6 +6,7 @@ Handles auto-reply detection, intent transitions, hostile exits, and anti-repeti
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime
+import hashlib
 
 
 class ConversationManager:
@@ -29,6 +30,7 @@ class ConversationManager:
                 "turns": [],
                 "auto_reply_count": 0,
                 "last_sent_body": "",
+                "last_merchant_msg_hash": None,  # SHA-256 hash tracking
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
         return self._conversations[conversation_id]
@@ -45,11 +47,25 @@ class ConversationManager:
     def classify_reply(self, message: str, conversation: dict) -> str:
         """
         Classify incoming merchant/customer message into response categories.
-        Returns: AUTO_REPLY, HARD_NO, HOSTILE, INTENT_COMMIT, ENGAGED
+        Implements SHA-256 hash tracking for auto-reply loop detection.
+        Returns: AUTO_REPLY, HARD_NO, HOSTILE, INTENT_COMMIT, ENGAGED, AUTO_REPLY_LOOP_DETECTED
         """
         msg_lower = message.lower().strip()
+        
+        # Compute SHA-256 hash of the current message
+        current_msg_hash = hashlib.sha256(message.encode()).hexdigest()
+        
+        # ── REPLAY TEST: Auto-Reply Loop Detection ──
+        # If Turn Count > 2 AND Current Message Hash == Previous Message Hash, END conversation
+        turn_count = len(conversation.get("turns", []))
+        last_merchant_msg_hash = conversation.get("last_merchant_msg_hash")
+        
+        if turn_count > 2 and last_merchant_msg_hash and current_msg_hash == last_merchant_msg_hash:
+            # Same message repeated after 2+ turns = definite auto-reply loop
+            conversation["state"] = "ENDED"
+            return "AUTO_REPLY_LOOP_DETECTED"
 
-        # ── AUTO-REPLY detection ──
+        # ── AUTO-REPLY KEYWORD DETECTION ──
         auto_reply_signals = [
             "thank you for contacting",
             "our team will respond",
@@ -65,17 +81,15 @@ class ConversationManager:
             "automated assistant",
         ]
         if any(sig in msg_lower for sig in auto_reply_signals):
+            # Store this hash for next comparison
+            conversation["last_merchant_msg_hash"] = current_msg_hash
             return "AUTO_REPLY"
 
-        # Check for verbatim repetition (same message sent before by this role)
-        prev_merchant_msgs = [
-            t["msg"] for t in conversation.get("turns", [])
-            if t["from"] in ("merchant", "customer") and t["msg"] != message
-        ]
-        # If this exact message appeared before from the same role
+        # Check for verbatim repetition in conversation history
         merchant_msgs = [t["msg"] for t in conversation.get("turns", [])
                         if t["from"] in ("merchant", "customer")]
         if merchant_msgs.count(message) >= 1:  # Already seen once before this
+            conversation["last_merchant_msg_hash"] = current_msg_hash
             return "AUTO_REPLY"
 
         # ── HARD NO / OPT-OUT ──
@@ -110,6 +124,9 @@ class ConversationManager:
         if any(sig in msg_lower for sig in intent_signals):
             return "INTENT_COMMIT"
 
+        # Store hash for next comparison
+        conversation["last_merchant_msg_hash"] = current_msg_hash
+        
         # ── DEFAULT: ENGAGED ──
         return "ENGAGED"
 

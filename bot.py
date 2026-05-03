@@ -307,6 +307,14 @@ async def reply(body: ReplyBody):
     # Record the incoming turn AFTER classification
     conv_mgr.add_turn(conv_id, body.from_role or "merchant", body.message)
 
+    # ── AUTO-REPLY LOOP DETECTED (Replay Test) ──
+    # If Turn Count > 2 AND same message hash repeated, END immediately
+    if classification == "AUTO_REPLY_LOOP_DETECTED":
+        return {
+            "action": "end",
+            "rationale": "Detected repetitive automated response (Auto-Reply loop). Gracefully exiting to prevent redundant messaging.",
+        }
+
     # ── AUTO-REPLY handling ──
     if classification == "AUTO_REPLY":
         conv["auto_reply_count"] = conv.get("auto_reply_count", 0) + 1
